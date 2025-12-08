@@ -2,6 +2,8 @@
 
 A FastAPI-based WebSocket application with JWT authentication, peer-to-peer messaging, and broadcasting capabilities.
 
+📖 **For detailed usage instructions, see [USAGE_GUIDE.md](./USAGE_GUIDE.md)**
+
 ## Features
 
 - ✅ WebSocket connections with JWT token authentication

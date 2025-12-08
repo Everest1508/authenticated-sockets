@@ -241,6 +241,39 @@ async def get_connected_users():
         "total_connections": len(manager.active_connections)
     }
 
+# Broadcast reading endpoint (for server-side publishing)
+@app.post("/api/broadcast")
+async def broadcast_reading(reading: dict):
+    """
+    Broadcast a new reading to all connected WebSocket clients.
+    This endpoint is used by the PHP backend to publish readings.
+    """
+    try:
+        # Prepare the message
+        message = {
+            "type": "published",
+            "from": "system",
+            "timestamp": datetime.now().isoformat(),
+            "message": {
+                "type": "new_reading",
+                "reading": reading
+            }
+        }
+        
+        # Broadcast to all connected clients
+        await manager.broadcast(json.dumps(message))
+        
+        return {
+            "success": True,
+            "message": "Reading broadcasted successfully",
+            "recipients": len(manager.active_connections)
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to broadcast reading: {str(e)}"
+        )
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
