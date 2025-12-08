@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile.fastapi
+    container_name: fastapi-ws
+    ports:
+      - "8001:8001"
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+    volumes:
+      - ./app:/app/app
+    networks:
+      - backend
+    restart: unless-stopped
+
+  web:
+    # Add your existing web service configuration here
+    # This is a placeholder - replace with your actual web service
+    image: nginx:alpine
+    container_name: web
+    ports:
+      - "8000:8000"
+    networks:
+      - backend
+    restart: unless-stopped
+
+  # nginx:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.nginx
+  #   container_name: proxy
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   depends_on:
+  #     - web
+  #     - fastapi
+  #   volumes:
+  #     - ./staticfiles:/app/staticfiles
+  #     - ./media:/app/media
+  #     - /etc/letsencrypt:/etc/letsencrypt
+  #   networks:
+  #     - backend
+  #   restart: unless-stopped
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  staticfiles:
+  media:
+

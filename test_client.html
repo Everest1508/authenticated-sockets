@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .disconnect {
+            background-color: #f44336;
+        }
+        .disconnect:hover {
+            background-color: #da190b;
+        }
+        #messages {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background-color: #fafafa;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        .message.sent {
+            background-color: #e3f2fd;
+            border-left: 3px solid #2196F3;
+        }
+        .message.received {
+            background-color: #f1f8e9;
+            border-left: 3px solid #4CAF50;
+        }
+        .message.error {
+            background-color: #ffebee;
+            border-left: 3px solid #f44336;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .status.connected {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .status.disconnected {
+            background-color: #f44336;
+            color: white;
+        }
+        .status.connecting {
+            background-color: #ff9800;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Test Client</h1>
+    
+    <div class="container">
+        <h2>Connection</h2>
+        <div class="form-group">
+            <label>API Base URL:</label>
+            <input type="text" id="apiUrl" value="http://localhost:8001" placeholder="http://localhost:8001">
+        </div>
+        <div class="form-group">
+            <label>Username:</label>
+            <input type="text" id="username" value="user1" placeholder="user1">
+        </div>
+        <div class="form-group">
+            <label>User ID:</label>
+            <input type="text" id="userId" value="user1" placeholder="user1">
+        </div>
+        <button onclick="getToken()">Get Token</button>
+        <button onclick="connect()" id="connectBtn">Connect</button>
+        <button onclick="disconnect()" id="disconnectBtn" class="disconnect" disabled>Disconnect</button>
+        <div id="status" class="status disconnected">Disconnected</div>
+    </div>
+
+    <div class="container">
+        <h2>Send Message</h2>
+        <div class="form-group">
+            <label>Message Type:</label>
+            <select id="messageType">
+                <option value="publish">Publish</option>
+                <option value="ping">Ping</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Peer User ID (leave empty for broadcast):</label>
+            <input type="text" id="peerUserId" placeholder="user2">
+        </div>
+        <div class="form-group">
+            <label>Message (JSON):</label>
+            <textarea id="messageText" rows="3">{"text": "Hello from WebSocket!"}</textarea>
+        </div>
+        <button onclick="sendMessage()" id="sendBtn" disabled>Send Message</button>
+    </div>
+
+    <div class="container">
+        <h2>Messages</h2>
+        <div id="messages"></div>
+        <button onclick="clearMessages()">Clear Messages</button>
+    </div>
+
+    <script>
+        let ws = null;
+        let token = null;
+
+        function updateStatus(status, text) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${status}`;
+            statusDiv.textContent = text;
+        }
+
+        function addMessage(type, data) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = `[${new Date().toLocaleTimeString()}] ${JSON.stringify(data, null, 2)}`;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        async function getToken() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const username = document.getElementById('username').value;
+            const userId = document.getElementById('userId').value;
+            
+            if (!apiUrl || !username) {
+                alert('Please provide API URL and username!');
+                return;
+            }
+            
+            try {
+                const url = `${apiUrl}/auth/token?username=${encodeURIComponent(username)}&user_id=${encodeURIComponent(userId || username)}`;
+                addMessage('sent', { action: 'Requesting token', url: url });
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const data = await response.json();
+                token = data.access_token;
+                addMessage('received', { action: 'Token received', user_id: data.user_id, username: data.username });
+                alert('Token received! You can now connect.');
+            } catch (error) {
+                const errorMsg = error.message || 'Unknown error';
+                addMessage('error', { error: 'Failed to get token', message: errorMsg });
+                alert(`Failed to get token: ${errorMsg}\n\nMake sure:\n1. The FastAPI service is running\n2. The API URL is correct (http://localhost:8001)\n3. CORS is enabled`);
+            }
+        }
+
+        function connect() {
+            if (!token) {
+                alert('Please get a token first!');
+                return;
+            }
+
+            const apiUrl = document.getElementById('apiUrl').value;
+            // Convert http to ws and https to wss
+            const wsUrl = apiUrl.replace('http://', 'ws://').replace('https://', 'wss://');
+            const wsEndpoint = `${wsUrl}/ws/${token}`;
+
+            updateStatus('connecting', 'Connecting...');
+            ws = new WebSocket(wsEndpoint);
+
+            ws.onopen = () => {
+                updateStatus('connected', 'Connected');
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('disconnectBtn').disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+                addMessage('received', { type: 'connection', status: 'opened' });
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    addMessage('received', data);
+                } catch (e) {
+                    addMessage('received', { raw: event.data });
+                }
+            };
+
+            ws.onerror = (error) => {
+                addMessage('error', { error: 'WebSocket error', message: error.message || 'Unknown error' });
+            };
+
+            ws.onclose = () => {
+                updateStatus('disconnected', 'Disconnected');
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('disconnectBtn').disabled = true;
+                document.getElementById('sendBtn').disabled = true;
+                addMessage('error', { type: 'connection', status: 'closed' });
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function sendMessage() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert('Not connected!');
+                return;
+            }
+
+            const messageType = document.getElementById('messageType').value;
+            const peerUserId = document.getElementById('peerUserId').value;
+            const messageText = document.getElementById('messageText').value;
+
+            let message = {
+                type: messageType
+            };
+
+            if (messageType === 'publish') {
+                try {
+                    message.message = JSON.parse(messageText);
+                } catch (e) {
+                    message.message = { text: messageText };
+                }
+                if (peerUserId) {
+                    message.peer_user_id = peerUserId;
+                }
+            }
+
+            ws.send(JSON.stringify(message));
+            addMessage('sent', message);
+        }
+
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+        }
+    </script>
+</body>
+</html>
+
