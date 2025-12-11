@@ -27,24 +27,6 @@ services:
       - backend
     restart: unless-stopped
 
-  nginx:
-    build:
-      context: .
-      dockerfile: Dockerfile.nginx
-    container_name: proxy
-    ports:
-      - "80:80"
-      - "443:443"
-    depends_on:
-      - web
-      - fastapi
-    volumes:
-      - ./staticfiles:/app/staticfiles
-      - ./media:/app/media
-      - /etc/letsencrypt:/etc/letsencrypt
-    networks:
-      - backend
-    restart: unless-stopped
 
 networks:
   backend:
